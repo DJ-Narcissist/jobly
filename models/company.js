@@ -1,8 +1,10 @@
 "use strict";
 
+const { basename } = require("path");
 const db = require("../db");
 const { BadRequestError, NotFoundError } = require("../expressError");
 const { sqlForPartialUpdate } = require("../helpers/sql");
+const { search } = require("../routes/users");
 
 /** Related functions for companies. */
 
@@ -49,15 +51,42 @@ class Company {
    * Returns [{ handle, name, description, numEmployees, logoUrl }, ...]
    * */
 
-  static async findAll() {
-    const companiesRes = await db.query(
-          `SELECT handle,
+  static async findAll({name, minEmployees, maxEmployees}) {
+    let query = `SELECT handle,
                   name,
                   description,
                   num_employees AS "numEmployees",
                   logo_url AS "logoUrl"
            FROM companies
-           ORDER BY name`);
+           ORDER BY name`;
+    let  whereExpressions = [];
+    let queryValues = [];
+
+    const {minEmployees, maxEmployees, name } = searchFilters;
+    if (minEmployees, maxEmployees) {
+      throw new BadRequestError("Min Employees can not be greater than max employees");
+    }
+
+    if (minEmployees !== undefined) {
+      queryValues.push(minEmployees);
+      whereExpressions.push(`num_employees >= $${queryValues.length}`);
+    }
+
+    if (maxEmployees !== undefined) {
+      queryValues.push(maxEmployees);
+      whereExpressions.push(`num_employees <= $${queryValues.length}`);
+    }
+
+    if (name) {
+      queryValues.push(`$%{name}%`);
+      whereExpressions.push(`name ILIKE $${queryValues.length}`);
+    }
+    if (whereExpressions.length > 0) {
+      baseQuery += 'WHERE' + whereExpressions.join(' AND ');
+    }
+    
+    query += ' ORDER BY name';
+    const companiesRes = await db.query(query, queryValues);
     return companiesRes.rows;
   }
 
